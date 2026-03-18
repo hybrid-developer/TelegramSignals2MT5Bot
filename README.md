@@ -18,6 +18,7 @@ This bot allows you to automatically execute trading signals from multiple Teleg
 
 ## Project Structure
 
+```
 trading_bot/
 ├── main.py                  # Optional CLI version
 ├── telegram_async_bot.py    # Async Telegram bot
@@ -33,7 +34,7 @@ trading_bot/
 ├── config.py                # Dynamic configuration
 ├── requirements.txt         # Python dependencies
 └── README.md                # This guide
-
+```
 ---
 
 ## Prerequisites
