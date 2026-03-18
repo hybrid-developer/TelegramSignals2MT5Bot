@@ -1,26 +1,25 @@
-# filters.py
-import MetaTrader5 as mt5
-from config import MAX_TRADES_PER_DAY, CORRELATED
-from logger import get_today_trades
-from datetime import datetime
+# news.py - High impact news filter for trading bot
+import requests
+from datetime import datetime, timedelta
+import pytz  # pip install pytz if needed
 
-def spread_ok(symbol, max_spread=30):
-    tick = mt5.symbol_info_tick(symbol)
-    info = mt5.symbol_info(symbol)
-    if not tick or not info: return False
-    spread = (tick.ask-tick.bid)/info.point
-    return spread<=max_spread
-
-def session_ok():
-    hour=datetime.utcnow().hour
-    return 7<=hour<=20
-
-def trade_limit_ok():
-    return get_today_trades()<MAX_TRADES_PER_DAY
-
-def correlation_ok(symbol, open_positions):
-    for group in CORRELATED:
-        if symbol in group:
-            for pos in open_positions:
-                if pos.symbol in group: return False
-    return True
+def high_impact_news_soon(symbol=None, minutes_ahead=30):
+    """
+    Check if high-impact news for symbol is within next X minutes.
+    Returns True if news soon (avoid trading), False otherwise.
+    """
+    # Forex Factory RSS (or use economic calendar API)
+    url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        now = datetime.now(pytz.UTC)
+        
+        for event in data:
+            if (event.get('impact') == 'High' and
+                symbol in event.get('title', '') and
+                now <= datetime.fromisoformat(event['date'].replace('Z', '+00:00')) <= now + timedelta(minutes=minutes_ahead)):
+                return True
+        return False
+    except:
+        return False  # Safe default: assume no news if API fails

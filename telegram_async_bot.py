@@ -1,48 +1,85 @@
-import asyncio
-from aiogram import Bot, Dispatcher, types
-from parser import SignalParser
-from executor import execute, build_tp_scaling
-from ai_filter import is_a_plus
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS
-import MetaTrader5 as mt5
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import sys
 import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Path to MT5 terminal (update to your install path)
-MT5_PATH = r"C:\MT5_ICMarkets\terminal64.exe"
+import asyncio
+import logging
+import config
+from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.filters import Command
+from aiogram.exceptions import TelegramNetworkError
+import MetaTrader5 as mt5
 
-# Initialize MT5
-if not mt5.initialize(path=MT5_PATH):
-    print(f"Failed to connect to MT5. Error code: {mt5.last_error()}")
-    exit()
+API_TOKEN = config.TELEGRAM_BOT_TOKEN
+ALLOWED_CHAT_IDS = config.TELEGRAM_CHAT_IDS
 
-parser = SignalParser()
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
-dp = Dispatcher(bot)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-async def handle_signal(message: types.Message):
-    if TELEGRAM_CHAT_IDS and message.chat.id not in TELEGRAM_CHAT_IDS:
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(storage=MemoryStorage())
+
+
+async def on_startup():
+    mt5_path = r"C:\Program Files\MetaTrader 5\terminal64.exe"
+    if not mt5.initialize(mt5_path):
+        logging.error(f"MT5 init failed: {mt5.last_error()}")
+        return False
+    logging.info("MT5 ready")
+    return True
+
+
+async def on_shutdown():
+    mt5.shutdown()
+    logging.info("Shutdown complete")
+
+
+@dp.message(Command("start"))
+async def cmd_start(message):
+    logging.info(f"/start received | chat_id={message.chat.id} | chat_type={message.chat.type}")
+
+    if message.chat.id not in ALLOWED_CHAT_IDS:
+        logging.info(f"Ignored /start from unauthorized chat: {message.chat.id}")
         return
 
-    text = message.text
-    signal = parser.parse(text)
-    if not signal:
-        await message.reply("❌ Could not parse signal")
+    await message.answer("Bot is online and receiving messages.")
+
+
+@dp.message()
+async def debug_all_messages(message):
+    logging.info("----- NEW MESSAGE -----")
+    logging.info(f"CHAT ID   : {message.chat.id}")
+    logging.info(f"CHAT TYPE : {message.chat.type}")
+    logging.info(f"TEXT      : {message.text}")
+    logging.info(f"FROM USER : {getattr(message.from_user, 'id', None)}")
+
+    if message.chat.id not in ALLOWED_CHAT_IDS:
+        logging.info(f"Ignored: chat ID {message.chat.id} is not in ALLOWED_CHAT_IDS={ALLOWED_CHAT_IDS}")
         return
 
-    if not is_a_plus(signal):
-        await message.reply("⚠️ Signal rejected by AI filter")
+    if not message.text:
+        logging.info("Ignored: message has no text")
         return
 
-    signal["tp_levels"] = build_tp_scaling(signal["tps"])
-    balance = mt5.account_info().balance
-    result = execute(signal, balance)
-    await message.reply(f"✅ Signal executed: {result}")
+    await message.answer(f"Received signal text:\n{message.text}")
 
-dp.register_message_handler(handle_signal, content_types=types.ContentTypes.TEXT)
 
 async def main():
-    print("Bot started. Listening for signals...")
-    await dp.start_polling()
+    print("Token loaded:", repr(API_TOKEN))
+
+    if not await on_startup():
+        return
+
+    try:
+        await dp.start_polling(bot, skip_updates=True)
+    except TelegramNetworkError as e:
+        logging.error(f"Telegram network error: {e}")
+    finally:
+        await on_shutdown()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

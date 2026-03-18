@@ -1,0 +1,25 @@
+# HTTP / config
+requests
+pytz
+python-dotenv
+
+# Telegram
+python-telegram-bot
+telethon
+pyTelegramBotAPI
+
+# Trading / AI
+MetaTrader5
+openai
+
+# Web server / dashboard
+streamlit
+uvicorn
+fastapi
+pandas
+plotly
+
+# API / backend
+flask
+jinja2
+pydantic
