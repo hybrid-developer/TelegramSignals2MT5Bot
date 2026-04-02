@@ -14,6 +14,18 @@ from aiogram.filters import Command
 from aiogram.exceptions import TelegramNetworkError
 import MetaTrader5 as mt5
 
+from parser import SignalParser
+from executor import execute, build_tp_scaling
+from manager import manage_positions
+from logger import (
+    log_signal_received,
+    log_filter_rejected,
+    log_execution_rejected,
+    log_trade_placed,
+    log_trade_failed,
+)
+from ai_filter import is_a_plus
+
 API_TOKEN = config.TELEGRAM_BOT_TOKEN
 ALLOWED_CHAT_IDS = config.TELEGRAM_CHAT_IDS
 
@@ -21,6 +33,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
+parser = SignalParser()
 
 
 async def on_startup():
@@ -48,23 +61,84 @@ async def cmd_start(message):
     await message.answer("Bot is online and receiving messages.")
 
 
-@dp.message()
-async def debug_all_messages(message):
-    logging.info("----- NEW MESSAGE -----")
+@dp.channel_post()
+async def handle_channel_post(message):
+    logging.info("===== NEW CHANNEL POST =====")
     logging.info(f"CHAT ID   : {message.chat.id}")
     logging.info(f"CHAT TYPE : {message.chat.type}")
     logging.info(f"TEXT      : {message.text}")
-    logging.info(f"FROM USER : {getattr(message.from_user, 'id', None)}")
+    logging.info("SENDER    : channel_post")
 
     if message.chat.id not in ALLOWED_CHAT_IDS:
-        logging.info(f"Ignored: chat ID {message.chat.id} is not in ALLOWED_CHAT_IDS={ALLOWED_CHAT_IDS}")
+        logging.info(f"Ignored channel post: chat ID {message.chat.id} is not in ALLOWED_CHAT_IDS={ALLOWED_CHAT_IDS}")
         return
 
     if not message.text:
-        logging.info("Ignored: message has no text")
+        logging.info("Ignored channel post: no text")
         return
 
-    await message.answer(f"Received signal text:\n{message.text}")
+    raw_text = message.text.strip()
+    logging.info(f"AUTHORIZED CHANNEL SIGNAL:\n{raw_text}")
+
+    signal = parser.parse(raw_text)
+    if not signal:
+        logging.warning("Parser rejected signal")
+        return
+
+    logging.info(f"Parsed signal: {signal}")
+    log_signal_received(signal, source_chat=message.chat.id, raw_signal=raw_text)
+
+    if not is_a_plus(signal):
+        logging.warning("Signal rejected by AI filter")
+        log_filter_rejected(signal, reason="Rejected by AI filter", source_chat=message.chat.id, raw_signal=raw_text)
+        return
+
+    account = mt5.account_info()
+    if account is None:
+        logging.error("Failed to fetch MT5 account info")
+        log_execution_rejected(signal, reason="Failed to fetch MT5 account info", source_chat=message.chat.id, raw_signal=raw_text)
+        return
+
+    balance = account.balance
+    signal["tp_levels"] = build_tp_scaling(signal.get("tps", []))
+
+    try:
+        result = execute(signal, balance)
+        logging.info(f"Execution result: {result}")
+
+        if isinstance(result, str):
+            log_execution_rejected(signal, reason=result, source_chat=message.chat.id, raw_signal=raw_text)
+            return
+
+        if isinstance(result, dict):
+            for item in result.get("results", []):
+                if item.get("success"):
+                    log_trade_placed(
+                        signal=signal,
+                        tp=item.get("tp"),
+                        tp_index=item.get("tp_index"),
+                        lot=item.get("lot"),
+                        order_id=item.get("order_id"),
+                        deal_id=item.get("deal_id"),
+                        source_chat=message.chat.id,
+                        raw_signal=raw_text,
+                    )
+                else:
+                    log_trade_failed(
+                        signal=signal,
+                        tp=item.get("tp"),
+                        tp_index=item.get("tp_index"),
+                        lot=item.get("lot", config.MULTI_TP_LOT_SIZE),
+                        reason=item.get("error"),
+                        source_chat=message.chat.id,
+                        raw_signal=raw_text,
+                    )
+
+        manage_positions()
+
+    except Exception as e:
+        logging.exception(f"Execution failed: {e}")
+        log_execution_rejected(signal, reason=str(e), source_chat=message.chat.id, raw_signal=raw_text)
 
 
 async def main():

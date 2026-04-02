@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trading Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css" />
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <h1>Trading Dashboard</h1>
+            <p>Signals, rejections, executions, wins, and losses in one place.</p>
+        </header>
+
+        <section class="filters-section">
+            <form method="get" class="filters-form" id="filtersForm">
+                <select name="category">
+                    <option value="">All Categories</option>
+                    {% for item in options.categories %}
+                        <option value="{{ item }}" {% if selected.category == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="symbol">
+                    <option value="">All Symbols</option>
+                    {% for item in options.symbols %}
+                        <option value="{{ item }}" {% if selected.symbol == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="event_type">
+                    <option value="">All Event Types</option>
+                    {% for item in options.event_types %}
+                        <option value="{{ item }}" {% if selected.event_type == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="status">
+                    <option value="">All Statuses</option>
+                    {% for item in options.statuses %}
+                        <option value="{{ item }}" {% if selected.status == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="result">
+                    <option value="">All Results</option>
+                    {% for item in options.results %}
+                        <option value="{{ item }}" {% if selected.result == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="day">
+                    <option value="">All Days</option>
+                    {% for item in options.days %}
+                        <option value="{{ item }}" {% if selected.day == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+
+                <div class="filter-buttons">
+                    <button type="submit" class="btn primary">Apply Filters</button>
+                    <a href="/" class="btn secondary">Reset</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="metrics-grid">
+            <div class="metric-card">
+                <span>Total Events</span>
+                <strong>{{ summary.total_events }}</strong>
+            </div>
+            <div class="metric-card success">
+                <span>Trades Placed</span>
+                <strong>{{ summary.trades_placed }}</strong>
+            </div>
+            <div class="metric-card danger">
+                <span>Trades Failed</span>
+                <strong>{{ summary.trades_failed }}</strong>
+            </div>
+            <div class="metric-card danger">
+                <span>Filter Rejected</span>
+                <strong>{{ summary.filter_rejected }}</strong>
+            </div>
+            <div class="metric-card warning">
+                <span>Execution Rejected</span>
+                <strong>{{ summary.execution_rejected }}</strong>
+            </div>
+            <div class="metric-card {{ 'success' if summary.total_pnl >= 0 else 'danger' }}">
+                <span>Total PnL</span>
+                <strong>{{ summary.total_pnl }}</strong>
+            </div>
+            <div class="metric-card success">
+                <span>Wins</span>
+                <strong>{{ summary.wins }}</strong>
+            </div>
+            <div class="metric-card danger">
+                <span>Losses</span>
+                <strong>{{ summary.losses }}</strong>
+            </div>
+            <div class="metric-card warning">
+                <span>Breakeven</span>
+                <strong>{{ summary.breakeven }}</strong>
+            </div>
+            <div class="metric-card">
+                <span>Win Rate</span>
+                <strong>{{ summary.winrate }}%</strong>
+            </div>
+        </section>
+
+        <section class="two-col">
+            <div class="panel">
+                <h2>By Category</h2>
+                <div class="mini-grid">
+                    {% for cat, count in category_counts.items() %}
+                        <div class="mini-card">
+                            <span>{{ cat }}</span>
+                            <strong>{{ count }}</strong>
+                        </div>
+                    {% else %}
+                        <p>No category data.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>By Symbol</h2>
+                <div class="mini-grid">
+                    {% for sym, count in symbol_counts.items() %}
+                        <div class="mini-card">
+                            <span>{{ sym }}</span>
+                            <strong>{{ count }}</strong>
+                        </div>
+                    {% else %}
+                        <p>No symbol data.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Daily Wins / Losses</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Day</th>
+                        <th>Total Wins</th>
+                        <th>Total Losses</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day, vals in daily_stats.items() %}
+                    <tr>
+                        <td>{{ day }}</td>
+                        <td class="text-success">{{ vals.wins }}</td>
+                        <td class="text-danger">{{ vals.losses }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3">No daily data.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section class="panel">
+            <h2>Trade Events</h2>
+            <div class="table-wrap">
+                <table id="tradesTable">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Category</th>
+                            <th>SL</th>
+                            <th>TP</th>
+                            <th>Value</th>
+                            <th>Win/Loss</th>
+                            <th>Placed Date</th>
+                            <th>Placed Time</th>
+                            <th>Executed Time</th>
+                            <th>TP Reached Time</th>
+                            <th>SL Reached Time</th>
+                            <th>Event Type</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td>{{ row.symbol }}</td>
+                            <td>{{ row._category }}</td>
+                            <td>{{ row.sl }}</td>
+                            <td>{{ row.tp }}</td>
+                            <td>{{ row.lot }}</td>
+                            <td>
+                                {% set state = row.result or row.status or '-' %}
+                                <span class="badge
+                                    {% if state in ['win', 'placed', 'open', 'received'] %}badge-success
+                                    {% elif state in ['loss', 'failed', 'rejected'] %}badge-danger
+                                    {% elif state == 'breakeven' %}badge-warning
+                                    {% else %}badge-neutral{% endif %}">
+                                    {{ state }}
+                                </span>
+                            </td>
+                            <td>{{ row._placed_date }}</td>
+                            <td>{{ row._placed_time }}</td>
+                            <td>{{ row._executed_time }}</td>
+                            <td>{{ row._tp_time }}</td>
+                            <td>{{ row._sl_time }}</td>
+                            <td>{{ row.event_type }}</td>
+                            <td>{{ row.reason }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="13">No trade events found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

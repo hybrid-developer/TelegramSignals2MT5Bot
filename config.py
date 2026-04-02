@@ -1,27 +1,62 @@
 # config.py
+import os
+from dotenv import load_dotenv
 
-TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"
+load_dotenv()
 
-# List of allowed chat IDs (groups/channels)
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+
 TELEGRAM_CHAT_IDS = [
-    123456789,
-    987654321,
-    1122334455,
+    -1003771192148
 ]
 
-# Risk & trading limits
-RISK_PER_TRADE = 1.0
-MAX_DAILY_LOSS = 5.0
-MAX_TRADES_PER_DAY = 5
-CORRELATED = [["US500", "USTEC"]]
-NEWS_FILTER_MINUTES = 30
-
-# Symbol mapping for IC Markets
+# Broker symbol mapping
 SYMBOL_MAP = {
     "GOLD": "XAUUSD",
+    "XAUUSD": "XAUUSD",
     "SPX500": "US500",
+    "US500": "US500",
     "NAS100": "USTEC",
+    "USTEC": "USTEC",
     "GER30": "DE40",
+    "DE40": "DE40",
     "EURUSD": "EURUSD",
     "GBPJPY": "GBPJPY",
 }
+
+# Risk and trading limits
+RISK_PER_TRADE = 1.0
+RISK_PERCENT = 1.0
+DEFAULT_LOT_SIZE = 0.01
+USE_FIXED_LOT_SIZE = True
+MAX_DAILY_LOSS = 3.0
+MAX_TRADES_PER_DAY = 5
+MAX_OPEN_TRADES = 150
+
+CORRELATED = [["US500", "USTEC"]]
+NEWS_FILTER_MINUTES = 30
+
+# AI filter settings
+AI_FILTER_ENABLED = False
+AI_MIN_SCORE = 0.45
+AI_SCORE_DIVISOR = 2.0
+AI_BONUS_MULTIPLE_TPS = 0.10
+AI_REQUIRE_SL = True
+AI_REQUIRE_TP = True
+
+# Spread filter settings
+ENABLE_SPREAD_FILTER = False
+MAX_SPREAD_FOREX = 30
+MAX_SPREAD_GOLD = 120
+MAX_SPREAD_DEFAULT = 50
+
+# Multi-TP settings
+MULTI_TP_ENABLED = True
+MULTI_TP_FIXED_LOT_EACH = True
+MULTI_TP_LOT_SIZE = 0.01
+MAX_TP_ORDERS = 4
+
+# Execution settings
+DEVIATION = 20
+MAGIC_NUMBER = 20260318
