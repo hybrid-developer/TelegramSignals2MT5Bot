@@ -172,7 +172,6 @@ def send_with_supported_filling(request):
 
     return False, last_result, None
 
-
 def execute(signal, balance):
     symbol = normalize_symbol(signal.get("symbol"))
     action = signal.get("action")
@@ -192,8 +191,9 @@ def execute(signal, balance):
     if not ok:
         return msg
 
+    # If no TPs, place a single trade with no TP (0.0)
     if not tps:
-        return "❌ No valid TP values found"
+        tps = [0.0]
 
     order_mt5_type = get_order_type(action, order_type)
     if order_mt5_type is None:
@@ -206,11 +206,14 @@ def execute(signal, balance):
     per_order_lot = float(getattr(config, "MULTI_TP_LOT_SIZE", 0.01))
 
     existing_positions = count_open_positions()
-    allowed_total = getattr(config, "MAX_OPEN_TRADES", 1)
+    allowed_total = getattr(config, "MAX_OPEN_TRADES", 150)
     needed_orders = len(tps)
 
     if allowed_total is not None and existing_positions + needed_orders > allowed_total:
-        return f"❌ Not enough trade slots: open={existing_positions}, needed={needed_orders}, max={allowed_total}"
+        return (
+            f"❌ Not enough trade slots: open={existing_positions}, "
+            f"needed={needed_orders}, max={allowed_total}"
+        )
 
     deviation = getattr(config, "DEVIATION", 20)
     magic = getattr(config, "MAGIC_NUMBER", 20260318)
@@ -218,11 +221,13 @@ def execute(signal, balance):
     results = []
 
     for idx, tp in enumerate(tps, start=1):
-        ok, stop_msg = validate_stops(symbol, action, price, sl, tp)
+        tp_value = tp if tp and tp > 0 else 0.0
+
+        ok, stop_msg = validate_stops(symbol, action, price, sl, tp_value if tp_value > 0 else None)
         if not ok:
             results.append({
                 "tp_index": idx,
-                "tp": tp,
+                "tp": tp_value,
                 "success": False,
                 "lot": per_order_lot,
                 "error": stop_msg
@@ -236,7 +241,7 @@ def execute(signal, balance):
             "type": order_mt5_type,
             "price": price,
             "sl": sl if sl else 0.0,
-            "tp": tp,
+            "tp": tp_value,
             "deviation": deviation,
             "magic": magic,
             "comment": f"TG Bot {order_type} TP{idx}",
@@ -248,7 +253,7 @@ def execute(signal, balance):
         if success:
             results.append({
                 "tp_index": idx,
-                "tp": tp,
+                "tp": tp_value,
                 "success": True,
                 "lot": per_order_lot,
                 "order_id": getattr(mt5_result, "order", None),
@@ -261,11 +266,13 @@ def execute(signal, balance):
             if mt5_result is None:
                 err = f"❌ order_send failed: {mt5.last_error()}"
             else:
-                err = f"❌ Order failed | retcode={mt5_result.retcode} | comment={mt5_result.comment}"
-
+                err = (
+                    f"❌ Order failed | retcode={mt5_result.retcode} "
+                    f"| comment={mt5_result.comment}"
+                )
             results.append({
                 "tp_index": idx,
-                "tp": tp,
+                "tp": tp_value,
                 "success": False,
                 "lot": per_order_lot,
                 "error": err

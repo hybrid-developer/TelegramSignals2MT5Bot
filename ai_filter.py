@@ -36,10 +36,16 @@ def score_signal(signal):
     return min(score, 1.0)
 
 
-def is_a_plus(signal):
-    if not config.AI_FILTER_ENABLED:
-        return True
+# def is_a_plus(signal):
+#     if not config.AI_FILTER_ENABLED:
+#         return True
 
-    score = score_signal(signal)
-    print(f"AI score: {score:.2f} | min required: {config.AI_MIN_SCORE:.2f}")
-    return score >= config.AI_MIN_SCORE
+#     score = score_signal(signal)
+#     print(f"AI score: {score:.2f} | min required: {config.AI_MIN_SCORE:.2f}")
+#     return score >= config.AI_MIN_SCORE
+
+# ai_filter.py
+# AI filter is disabled via config. Always approves signals.
+
+def is_a_plus(signal):
+    return True
